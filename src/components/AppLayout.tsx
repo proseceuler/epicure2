@@ -1,0 +1,164 @@
+import { useState, useEffect, type ReactNode } from 'react';
+import { SUBJECTS, NUM_TERMS } from '@/lib/types';
+import GlobalDock from '@/components/GlobalDock';
+import {
+  LayoutDashboard, Calculator, FolderTree, CheckSquare, Calendar,
+  Timer, BarChart3, CalendarHeart, StickyNote, Wallet,
+  GraduationCap, Menu, X
+} from 'lucide-react';
+
+export type PageId =
+  | 'dashboard' | 'grades' | 'forecast' | 'classhub'
+  | 'todos' | 'kanban' | 'calendar'
+  | 'pomodoro' | 'analytics'
+  | 'habits' | 'scratchpad' | 'finance';
+
+interface NavItem {
+  id: PageId;
+  label: string;
+  icon: typeof LayoutDashboard;
+  group: string;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
+  { id: 'grades', label: 'Grade Calculator', icon: Calculator, group: 'Academic' },
+  { id: 'forecast', label: 'Grade Forecaster', icon: BarChart3, group: 'Academic' },
+  { id: 'classhub', label: 'Class Hub', icon: FolderTree, group: 'Academic' },
+  { id: 'todos', label: 'To-Do List', icon: CheckSquare, group: 'Tasks' },
+  { id: 'kanban', label: 'Kanban Board', icon: FolderTree, group: 'Tasks' },
+  { id: 'calendar', label: 'Deadlines Calendar', icon: Calendar, group: 'Tasks' },
+  { id: 'pomodoro', label: 'Focus Timer', icon: Timer, group: 'Focus' },
+  { id: 'analytics', label: 'Focus Analytics', icon: BarChart3, group: 'Focus' },
+  { id: 'habits', label: 'Habit Tracker', icon: CalendarHeart, group: 'Personal' },
+  { id: 'finance', label: 'Baon Tracker', icon: Wallet, group: 'Personal' },
+  { id: 'scratchpad', label: 'Scratchpad', icon: StickyNote, group: 'Personal' },
+];
+
+const GROUPS = ['Overview', 'Academic', 'Tasks', 'Focus', 'Personal'];
+
+export function usePageState(): [PageId, (p: PageId) => void] {
+  const [page, setPage] = useState<PageId>(() => {
+    const hash = window.location.hash.slice(1) as PageId;
+    return NAV_ITEMS.some((n) => n.id === hash) ? hash : 'dashboard';
+  });
+
+  useEffect(() => {
+    const onHash = () => {
+      const hash = window.location.hash.slice(1) as PageId;
+      if (NAV_ITEMS.some((n) => n.id === hash)) setPage(hash);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const navigate = (p: PageId) => {
+    window.location.hash = p;
+    setPage(p);
+  };
+
+  return [page, navigate];
+}
+
+export default function AppLayout({ page, navigate, children }: { page: PageId; navigate: (p: PageId) => void; children: ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const currentLabel = NAV_ITEMS.find((n) => n.id === page)?.label ?? 'Dashboard';
+
+  return (
+    <div className="min-h-screen bg-zinc-100 relative overflow-hidden">
+      {/* Ambient background blobs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-zinc-300/20 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 -right-40 w-96 h-96 bg-zinc-400/15 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-zinc-200/25 rounded-full blur-3xl" />
+      </div>
+
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-zinc-900/30 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Floating sidebar */}
+      <aside className={`fixed top-4 left-4 bottom-4 w-60 z-40 transition-transform duration-300 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-[280px] lg:translate-x-0'
+      }`}>
+        <div className="glass-dark glass-shadow-lg rounded-3xl h-full flex flex-col overflow-hidden">
+          {/* Logo */}
+          <div className="flex items-center gap-3 px-5 h-16 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-bold text-lg text-white">StudyHub</span>
+          </div>
+
+          {/* Nav */}
+          <nav className="flex-1 overflow-y-auto py-3 px-3">
+            {GROUPS.map((group) => (
+              <div key={group} className="mb-3">
+                <p className="px-3 mb-1 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{group}</p>
+                {NAV_ITEMS.filter((n) => n.group === group).map((item) => {
+                  const Icon = item.icon;
+                  const active = page === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => { navigate(item.id); setSidebarOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                        active
+                          ? 'bg-white/15 text-white'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+
+          {/* Footer */}
+          <div className="border-t border-white/5 p-3 shrink-0">
+            <div className="flex items-center gap-2 px-3 py-2">
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold text-white">
+                G
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-200">Grade 10</p>
+                <p className="text-xs text-zinc-500">KS3 · {SUBJECTS.length} subjects · {NUM_TERMS} terms</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="lg:pl-72 flex flex-col min-h-screen relative z-10">
+        {/* Floating header */}
+        <header className="sticky top-4 z-20 px-4 lg:px-6 mb-2">
+          <div className="glass glass-shadow rounded-2xl h-14 flex items-center justify-between px-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-2 rounded-lg hover:bg-zinc-200/50"
+              >
+                {sidebarOpen ? <X className="w-5 h-5 text-zinc-700" /> : <Menu className="w-5 h-5 text-zinc-700" />}
+              </button>
+              <h1 className="text-lg font-semibold text-zinc-800">{currentLabel}</h1>
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 px-4 lg:px-6 pb-24 pt-2">
+          {children}
+        </main>
+      </div>
+
+      {/* Global bottom dock */}
+      <GlobalDock navigate={navigate} />
+    </div>
+  );
+}
