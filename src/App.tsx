@@ -12,6 +12,10 @@ import AnalyticsPage from '@/pages/AnalyticsPage';
 import HabitsPage from '@/pages/HabitsPage';
 import ScratchpadPage from '@/pages/ScratchpadPage';
 import FinancePage from '@/pages/FinancePage';
+import NotesPage from '@/pages/NotesPage';
+import TimetablePage from '@/pages/TimetablePage';
+import FlashcardsPage from '@/pages/FlashcardsPage';
+import SettingsPage from '@/pages/SettingsPage';
 
 function App() {
   const [page, navigate] = usePageState();
@@ -24,11 +28,15 @@ function App() {
     todos: <TodosPage />,
     kanban: <KanbanPage />,
     calendar: <CalendarPage />,
+    notes: <NotesPage />,
     pomodoro: <PomodoroPage />,
     analytics: <AnalyticsPage />,
     habits: <HabitsPage />,
-    scratchpad: <ScratchpadPage />,
     finance: <FinancePage />,
+    timetable: <TimetablePage />,
+    flashcards: <FlashcardsPage />,
+    scratchpad: <ScratchpadPage />,
+    settings: <SettingsPage />,
   };
 
   return (
