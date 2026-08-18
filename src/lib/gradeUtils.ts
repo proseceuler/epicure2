@@ -1,97 +1,99 @@
-import type { Assessment, ComponentType, SubjectKey } from './types';
-import { COMPONENT_WEIGHTS, EX_TYPES } from './types';
+import type { Assessment, SubjectKey, ComponentType, ExType } from './types';
+import { SUBJECT_MAP, EX_BREAKDOWN, NUM_TERMS, SUBJECTS } from './types';
 
-export function gradeColor(percentage: number): string {
-  if (percentage >= 90) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-  if (percentage >= 80) return 'text-blue-600 bg-blue-50 border-blue-200';
-  if (percentage >= 75) return 'text-amber-600 bg-amber-50 border-amber-200';
-  return 'text-red-600 bg-red-50 border-red-200';
+export function componentPercentage(assessments: Assessment[], component: ComponentType, exType?: ExType): number {
+  const filtered = exType
+    ? assessments.filter((a) => a.component === component && a.ex_type === exType)
+    : assessments.filter((a) => a.component === component);
+
+  const totalScore = filtered.reduce((sum, a) => sum + Number(a.score), 0);
+  const totalMax = filtered.reduce((sum, a) => sum + Number(a.max_score), 0);
+  if (totalMax === 0) return 0;
+  return (totalScore / totalMax) * 100;
 }
 
-export function gradeHex(percentage: number): string {
-  if (percentage >= 90) return '#10b981';
-  if (percentage >= 80) return '#3b82f6';
-  if (percentage >= 75) return '#f59e0b';
-  return '#ef4444';
+export function exComponentPercentage(assessments: Assessment[], exType: ExType): number {
+  const filtered = assessments.filter((a) => a.component === 'ex' && a.ex_type === exType);
+  const totalScore = filtered.reduce((sum, a) => sum + Number(a.score), 0);
+  const totalMax = filtered.reduce((sum, a) => sum + Number(a.max_score), 0);
+  if (totalMax === 0) return 0;
+  return (totalScore / totalMax) * 100;
 }
 
-export function percentage(score: number, maxScore: number): number {
-  if (maxScore <= 0) return 0;
-  return (score / maxScore) * 100;
+export function computeTermGrade(subjectKey: SubjectKey, term: number, assessments: Assessment[]): number | null {
+  const subject = SUBJECT_MAP[subjectKey];
+  const tAssessments = assessments.filter((a) => a.subject_key === subjectKey && a.quarter === term);
+  if (tAssessments.length === 0) return null;
+
+  const wwPct = componentPercentage(tAssessments, 'ww');
+  const ptPct = componentPercentage(tAssessments, 'pt');
+
+  const st1Pct = exComponentPercentage(tAssessments, 'st1');
+  const st2Pct = exComponentPercentage(tAssessments, 'st2');
+  const tePct = exComponentPercentage(tAssessments, 'te');
+
+  const hasEx = tAssessments.some((a) => a.component === 'ex');
+  let exPct = 0;
+  if (hasEx) {
+    const st1Weighted = st1Pct * (EX_BREAKDOWN.st1 / 100);
+    const st2Weighted = st2Pct * (EX_BREAKDOWN.st2 / 100);
+    const teWeighted = tePct * (EX_BREAKDOWN.te / 100);
+    exPct = st1Weighted + st2Weighted + teWeighted;
+  }
+
+  const hasWw = tAssessments.some((a) => a.component === 'ww');
+  const hasPt = tAssessments.some((a) => a.component === 'pt');
+
+  if (!hasWw && !hasPt && !hasEx) return null;
+
+  const initialGrade =
+    (hasWw ? (wwPct * subject.weights.ww) / 100 : 0) +
+    (hasPt ? (ptPct * subject.weights.pt) / 100 : 0) +
+    (hasEx ? (exPct * subject.weights.ex) / 100 : 0);
+
+  return transmuteGrade(initialGrade);
 }
 
-export function componentAverage(assessments: Assessment[]): { pct: number; count: number } {
-  if (assessments.length === 0) return { pct: 0, count: 0 };
-  const totalPct = assessments.reduce((sum, a) => sum + percentage(a.score, a.max_score), 0);
-  return { pct: totalPct / assessments.length, count: assessments.length };
+export function transmuteGrade(initialGrade: number): number {
+  if (initialGrade >= 96) return 100;
+  if (initialGrade >= 90) return 97 + (initialGrade - 90) * 0.5;
+  if (initialGrade >= 84) return 91 + (initialGrade - 84) * 1;
+  if (initialGrade >= 78) return 85 + (initialGrade - 78) * 1;
+  if (initialGrade >= 72) return 79 + (initialGrade - 72) * 1;
+  if (initialGrade >= 66) return 73 + (initialGrade - 66) * 0.33;
+  if (initialGrade >= 60) return 70 + (initialGrade - 60) * 0.5;
+  return 60;
 }
 
-export function termGrade(assessments: Assessment[], quarter: number, subjectKey: SubjectKey): {
-  ww: { pct: number; count: number };
-  pt: { pct: number; count: number };
-  ex: { pct: number; count: number };
-  overall: number;
-  hasData: boolean;
-} {
-  const subjectAssessments = assessments.filter(
-    (a) => a.subject_key === subjectKey && a.quarter === quarter
+export function gradeDescriptor(grade: number): { label: string; tone: 'high' | 'mid' | 'low' | 'fail' } {
+  if (grade >= 90) return { label: 'Outstanding', tone: 'high' };
+  if (grade >= 85) return { label: 'Very Satisfactory', tone: 'high' };
+  if (grade >= 80) return { label: 'Satisfactory', tone: 'mid' };
+  if (grade >= 75) return { label: 'Fairly Satisfactory', tone: 'mid' };
+  return { label: 'Did Not Meet Expectations', tone: 'fail' };
+}
+
+export function computeFinalGrade(subjectKey: SubjectKey, assessments: Assessment[]): number | null {
+  const terms: (number | null)[] = Array.from({ length: NUM_TERMS }, (_, i) =>
+    computeTermGrade(subjectKey, i + 1, assessments)
   );
-
-  const ww = componentAverage(subjectAssessments.filter((a) => a.component === 'ww'));
-  const pt = componentAverage(subjectAssessments.filter((a) => a.component === 'pt'));
-  const ex = componentAverage(subjectAssessments.filter((a) => a.component === 'ex'));
-
-  let overall = 0;
-  let hasComponents = 0;
-  if (ww.count > 0) { overall += ww.pct * COMPONENT_WEIGHTS.ww; hasComponents++; }
-  if (pt.count > 0) { overall += pt.pct * COMPONENT_WEIGHTS.pt; hasComponents++; }
-  if (ex.count > 0) { overall += ex.pct * COMPONENT_WEIGHTS.ex; hasComponents++; }
-
-  const hasData = hasComponents > 0;
-  if (!hasData) overall = 0;
-
-  return { ww, pt, ex, overall, hasData };
+  const valid = terms.filter((q): q is number => q !== null);
+  if (valid.length === 0) return null;
+  return valid.reduce((sum, g) => sum + g, 0) / valid.length;
 }
 
-export function minimumScoreNeeded(
-  currentAverage: number,
-  currentCount: number,
-  maxScore: number,
-  targetGrade: number
-): number {
-  const totalAfter = (currentAverage * currentCount + 0) / (currentCount + 1);
-  const neededAvg = (targetGrade * (currentCount + 1) - currentAverage * currentCount);
-  return Math.max(0, Math.ceil((neededAvg / 100) * maxScore));
+export function computeGeneralAverage(assessments: Assessment[]): number | null {
+  const finals = SUBJECTS
+    .map((s) => computeFinalGrade(s.key, assessments))
+    .filter((g): g is number => g !== null);
+  if (finals.length === 0) return null;
+  return finals.reduce((sum, g) => sum + g, 0) / finals.length;
 }
 
-export function exportTermGrade(subjectName: string, quarter: number, data: {
-  ww: { pct: number; count: number };
-  pt: { pct: number; count: number };
-  ex: { pct: number; count: number };
-  overall: number;
-}): string {
-  const lines = [
-    `Term Grade Export`,
-    `Subject: ${subjectName}`,
-    `Quarter: ${quarter}`,
-    ``,
-    `Written Work (${data.ww.count} items): ${data.ww.pct.toFixed(2)}%`,
-    `Performance Task (${data.pt.count} items): ${data.pt.pct.toFixed(2)}%`,
-    `Examination (${data.ex.count} items): ${data.ex.pct.toFixed(2)}%`,
-    ``,
-    `Overall Term Grade: ${data.overall.toFixed(2)}%`,
-    ``,
-    `Exported on: ${new Date().toLocaleString()}`,
-  ];
-  return lines.join('\n');
-}
-
-export function downloadText(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+export function gradeTone(grade: number | null): 'high' | 'mid' | 'low' | 'fail' | 'none' {
+  if (grade === null) return 'none';
+  if (grade >= 85) return 'high';
+  if (grade >= 80) return 'mid';
+  if (grade >= 75) return 'low';
+  return 'fail';
 }

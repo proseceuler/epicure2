@@ -1,6 +1,12 @@
 export type SubjectKey =
-  | 'math' | 'science' | 'ap' | 'research'
-  | 'filipino' | 'english' | 'values' | 'mapeh';
+  | 'math'
+  | 'science'
+  | 'ap'
+  | 'research'
+  | 'filipino'
+  | 'english'
+  | 'values'
+  | 'mapeh';
 
 export type ComponentType = 'ww' | 'pt' | 'ex';
 export type ExType = 'st1' | 'st2' | 'te';
@@ -9,39 +15,28 @@ export interface Subject {
   key: SubjectKey;
   name: string;
   shortName: string;
-  color: string;
+  weights: { ww: number; pt: number; ex: number };
 }
 
 export const SUBJECTS: Subject[] = [
-  { key: 'math', name: 'Mathematics', shortName: 'Math', color: '#3b82f6' },
-  { key: 'science', name: 'Science', shortName: 'Sci', color: '#10b981' },
-  { key: 'ap', name: 'Araling Panlipunan', shortName: 'AP', color: '#f59e0b' },
-  { key: 'research', name: 'Research', shortName: 'Res', color: '#8b5cf6' },
-  { key: 'filipino', name: 'Filipino', shortName: 'Fil', color: '#ef4444' },
-  { key: 'english', name: 'English', shortName: 'Eng', color: '#06b6d4' },
-  { key: 'values', name: 'Values Education', shortName: 'ValEd', color: '#ec4899' },
-  { key: 'mapeh', name: 'MAPEH', shortName: 'MAPEH', color: '#f97316' },
+  { key: 'math', name: 'Mathematics', shortName: 'Math', weights: { ww: 20, pt: 50, ex: 30 } },
+  { key: 'science', name: 'Science', shortName: 'Science', weights: { ww: 20, pt: 50, ex: 30 } },
+  { key: 'ap', name: 'Araling Panlipunan', shortName: 'A.P', weights: { ww: 20, pt: 50, ex: 30 } },
+  { key: 'research', name: 'Research', shortName: 'Research', weights: { ww: 20, pt: 50, ex: 30 } },
+  { key: 'filipino', name: 'Filipino', shortName: 'Filipino', weights: { ww: 20, pt: 50, ex: 30 } },
+  { key: 'english', name: 'English', shortName: 'English', weights: { ww: 20, pt: 50, ex: 30 } },
+  { key: 'values', name: 'Values Education', shortName: 'Values Ed', weights: { ww: 20, pt: 50, ex: 30 } },
+  { key: 'mapeh', name: 'Music, Arts, PE & Health', shortName: 'MAPEH', weights: { ww: 20, pt: 60, ex: 20 } },
 ];
+
+export const SUBJECT_MAP: Record<SubjectKey, Subject> = SUBJECTS.reduce(
+  (acc, s) => ({ ...acc, [s.key]: s }),
+  {} as Record<SubjectKey, Subject>
+);
+
+export const EX_BREAKDOWN = { st1: 30, st2: 30, te: 40 } as const;
 
 export const NUM_TERMS = 3;
-
-export const COMPONENT_WEIGHTS: Record<ComponentType, number> = {
-  ww: 0.3,
-  pt: 0.3,
-  ex: 0.4,
-};
-
-export const COMPONENT_LABELS: Record<ComponentType, string> = {
-  ww: 'Written Work',
-  pt: 'Performance Task',
-  ex: 'Examination',
-};
-
-export const EX_TYPES: { key: ExType; label: string }[] = [
-  { key: 'st1', label: 'Summative Test 1' },
-  { key: 'st2', label: 'Summative Test 2' },
-  { key: 'te', label: 'Term Exam' },
-];
 
 export interface Assessment {
   id: string;
@@ -52,7 +47,6 @@ export interface Assessment {
   name: string;
   score: number;
   max_score: number;
-  created_at: string;
 }
 
 export interface ClassHub {
@@ -62,7 +56,6 @@ export interface ClassHub {
   office_hours: string;
   room: string;
   notes: string;
-  updated_at: string;
 }
 
 export interface ClassHubLink {
@@ -70,7 +63,6 @@ export interface ClassHubLink {
   subject_key: SubjectKey;
   title: string;
   url: string;
-  created_at: string;
 }
 
 export interface Todo {
@@ -80,7 +72,6 @@ export interface Todo {
   due_date: string | null;
   priority: 'urgent_important' | 'not_urgent_important' | 'urgent_not_important' | 'not_urgent_not_important';
   completed: boolean;
-  created_at: string;
 }
 
 export interface KanbanTask {
@@ -91,7 +82,6 @@ export interface KanbanTask {
   status: 'todo' | 'in_progress' | 'review' | 'done';
   due_date: string | null;
   sort_order: number;
-  created_at: string;
 }
 
 export interface PomodoroSession {
@@ -121,7 +111,6 @@ export interface Habit {
   icon: string;
   goal_target: number;
   emoji: string;
-  created_at: string;
 }
 
 export interface HabitCompletion {
@@ -130,6 +119,7 @@ export interface HabitCompletion {
   completion_date: string;
 }
 
+// ─── Finance ───
 export type ExpenseCategory = 'transportation' | 'food' | 'academics' | 'leisure';
 
 export interface FinanceSettings {
@@ -147,7 +137,6 @@ export interface FinanceTransaction {
   description: string;
   transaction_date: string;
   is_recurring: boolean;
-  is_income: boolean;
 }
 
 export interface FinanceGoal {
@@ -164,6 +153,7 @@ export const EXPENSE_CATEGORIES: { key: ExpenseCategory; label: string; emoji: s
   { key: 'leisure', label: 'Wants / Leisure', emoji: '🎮' },
 ];
 
+// ─── Wellness ───
 export interface WellnessLog {
   id: string;
   log_date: string;
@@ -171,6 +161,7 @@ export interface WellnessLog {
   sleep_hours: number | null;
 }
 
+// ─── Notes ───
 export interface Note {
   id: string;
   title: string;
@@ -183,9 +174,10 @@ export interface Note {
   updated_at: string;
 }
 
+// ─── Timetable ───
 export interface TimetableEntry {
   id: string;
-  subject_key: SubjectKey;
+  subject_key: string;
   day_of_week: number;
   start_time: string;
   end_time: string;
@@ -199,9 +191,10 @@ export interface ClassAttendance {
   status: 'pending' | 'attended' | 'skipped';
 }
 
+// ─── Flashcards ───
 export interface FlashcardDeck {
   id: string;
-  subject_key: SubjectKey | null;
+  subject_key: string | null;
   name: string;
 }
 
@@ -216,14 +209,7 @@ export interface Flashcard {
   review_count: number;
 }
 
-export interface TodoSubtask {
-  id: string;
-  todo_id: string;
-  title: string;
-  completed: boolean;
-  estimated_minutes: number;
-}
-
+// ─── Forecast Scenarios ───
 export interface ForecastScenario {
   id: string;
   name: string;
@@ -232,4 +218,13 @@ export interface ForecastScenario {
   target_grade: number;
   scenario_data: Record<string, unknown>;
   created_at: string;
+}
+
+// ─── Subtasks ───
+export interface TodoSubtask {
+  id: string;
+  todo_id: string;
+  title: string;
+  completed: boolean;
+  estimated_minutes: number;
 }

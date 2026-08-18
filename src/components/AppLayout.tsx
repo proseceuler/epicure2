@@ -1,14 +1,14 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { SUBJECTS, NUM_TERMS } from '@/lib/types';
 import GlobalDock from '@/components/GlobalDock';
-import { LayoutDashboard, Calculator, FolderTree, SquareCheck, Calendar, Timer, ChartBar, CalendarHeart, StickyNote, Wallet, Menu, X, BookOpen, Clock, Layers, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Calculator, FolderTree, SquareCheck as CheckSquare, Calendar, Timer, ChartBar as BarChart3, CalendarHeart, StickyNote, Wallet, Menu, X, Clock, Layers, Settings as SettingsIcon } from 'lucide-react';
 
 export type PageId =
   | 'dashboard' | 'grades' | 'forecast' | 'classhub'
-  | 'todos' | 'kanban' | 'calendar'
+  | 'todos' | 'kanban' | 'calendar' | 'notes'
   | 'pomodoro' | 'analytics'
-  | 'habits' | 'finance' | 'scratchpad'
-  | 'notes' | 'timetable' | 'flashcards' | 'settings';
+  | 'habits' | 'finance' | 'timetable' | 'flashcards'
+  | 'scratchpad' | 'settings';
 
 interface NavItem {
   id: PageId;
@@ -20,14 +20,14 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
   { id: 'grades', label: 'Grade Calculator', icon: Calculator, group: 'Academic' },
-  { id: 'forecast', label: 'Grade Forecaster', icon: ChartBar, group: 'Academic' },
+  { id: 'forecast', label: 'Grade Forecaster', icon: BarChart3, group: 'Academic' },
   { id: 'classhub', label: 'Class Hub', icon: FolderTree, group: 'Academic' },
-  { id: 'todos', label: 'To-Do List', icon: SquareCheck, group: 'Tasks' },
+  { id: 'todos', label: 'To-Do List', icon: CheckSquare, group: 'Tasks' },
   { id: 'kanban', label: 'Kanban Board', icon: LayoutDashboard, group: 'Tasks' },
   { id: 'calendar', label: 'Deadlines Calendar', icon: Calendar, group: 'Tasks' },
   { id: 'notes', label: 'Notes', icon: StickyNote, group: 'Tasks' },
   { id: 'pomodoro', label: 'Focus Timer', icon: Timer, group: 'Focus' },
-  { id: 'analytics', label: 'Focus Analytics', icon: ChartBar, group: 'Focus' },
+  { id: 'analytics', label: 'Focus Analytics', icon: BarChart3, group: 'Focus' },
   { id: 'habits', label: 'Habit Tracker', icon: CalendarHeart, group: 'Personal' },
   { id: 'finance', label: 'Baon Tracker', icon: Wallet, group: 'Personal' },
   { id: 'timetable', label: 'Class Timetable', icon: Clock, group: 'Personal' },
@@ -61,14 +61,7 @@ export function usePageState(): [PageId, (p: PageId) => void] {
   return [page, navigate];
 }
 
-interface AppLayoutProps {
-  page: PageId;
-  navigate: (p: PageId) => void;
-  children: ReactNode;
-  onQuickCapture: () => void;
-}
-
-export default function AppLayout({ page, navigate, children, onQuickCapture }: AppLayoutProps) {
+export default function AppLayout({ page, navigate, children }: { page: PageId; navigate: (p: PageId) => void; children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const currentLabel = NAV_ITEMS.find((n) => n.id === page)?.label ?? 'Dashboard';
@@ -79,20 +72,24 @@ export default function AppLayout({ page, navigate, children, onQuickCapture }: 
 
   return (
     <div className="min-h-screen bg-zinc-100 relative overflow-hidden">
+      {/* Ambient background blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-zinc-300/20 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-40 w-96 h-96 bg-zinc-400/15 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-zinc-200/25 rounded-full blur-3xl" />
       </div>
 
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-zinc-900/30 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
+      {/* Floating sidebar */}
       <aside className={`fixed top-4 left-4 bottom-4 w-60 z-40 transition-transform duration-300 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-[280px] lg:translate-x-0'
       }`}>
         <div className="glass-dark glass-shadow-lg rounded-3xl h-full flex flex-col overflow-hidden">
+          {/* Logo */}
           <div className="flex items-center gap-3 px-5 h-16 shrink-0">
             <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden">
               <img
@@ -104,6 +101,7 @@ export default function AppLayout({ page, navigate, children, onQuickCapture }: 
             <span className="font-bold text-lg text-white">epicure</span>
           </div>
 
+          {/* Nav */}
           <nav className="flex-1 overflow-y-auto py-3 px-3">
             {GROUPS.map((group) => (
               <div key={group} className="mb-3">
@@ -130,6 +128,7 @@ export default function AppLayout({ page, navigate, children, onQuickCapture }: 
             ))}
           </nav>
 
+          {/* Footer */}
           <div className="border-t border-white/5 p-3 shrink-0">
             <div className="flex items-center gap-2 px-3 py-2">
               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold text-white">
@@ -144,7 +143,9 @@ export default function AppLayout({ page, navigate, children, onQuickCapture }: 
         </div>
       </aside>
 
+      {/* Main content */}
       <div className="lg:pl-72 flex flex-col min-h-screen relative z-10">
+        {/* Floating header */}
         <header className="sticky top-4 z-20 px-4 lg:px-6 mb-2">
           <div className="glass glass-shadow rounded-2xl h-14 flex items-center justify-between px-4">
             <div className="flex items-center gap-3">
@@ -159,12 +160,14 @@ export default function AppLayout({ page, navigate, children, onQuickCapture }: 
           </div>
         </header>
 
+        {/* Page content */}
         <main className="flex-1 px-4 lg:px-6 pb-24 pt-2">
           {children}
         </main>
       </div>
 
-      <GlobalDock navigate={navigate} onQuickCapture={onQuickCapture} />
+      {/* Global bottom dock */}
+      <GlobalDock navigate={navigate} />
     </div>
   );
 }
