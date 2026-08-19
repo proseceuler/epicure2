@@ -172,11 +172,19 @@ export default function DictionaryWidget({ detached, onDetach, onSnapBack, onClo
 
     const apiKey = import.meta.env.VITE_MW_DICTIONARY_API_KEY;
     const word = encodeURIComponent(term.trim().toLowerCase());
-    const url = `https://dictionaryapi.com/api/v3/references/collegiate/json/${word}?key=${apiKey}`;
+    const proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dictionary-proxy?word=${word}`;
 
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const res = await fetch(proxyUrl, {
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'X-MW-Key': apiKey || '',
+        },
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `API error: ${res.status}`);
+      }
       const data = await res.json();
 
       if (!Array.isArray(data)) {

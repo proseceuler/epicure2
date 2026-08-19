@@ -1,14 +1,14 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { SUBJECTS, NUM_TERMS } from '@/lib/types';
 import GlobalDock from '@/components/GlobalDock';
-import { LayoutDashboard, Calculator, FolderTree, SquareCheck as CheckSquare, Calendar, Timer, ChartBar as BarChart3, CalendarHeart, StickyNote, Wallet, Menu, X, Clock, Layers, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Calculator, FolderTree, SquareCheck as CheckSquare, Calendar, Timer, ChartBar as BarChart3, CalendarHeart, StickyNote, Wallet, Menu, X, Layers, Settings as SettingsIcon } from 'lucide-react';
 
 export type PageId =
   | 'dashboard' | 'grades' | 'forecast' | 'classhub'
   | 'todos' | 'kanban' | 'calendar' | 'notes'
   | 'pomodoro' | 'analytics'
-  | 'habits' | 'finance' | 'timetable' | 'flashcards'
-  | 'scratchpad' | 'settings';
+  | 'habits' | 'finance' | 'flashcards'
+  | 'settings';
 
 interface NavItem {
   id: PageId;
@@ -25,14 +25,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'todos', label: 'To-Do List', icon: CheckSquare, group: 'Tasks' },
   { id: 'kanban', label: 'Kanban Board', icon: LayoutDashboard, group: 'Tasks' },
   { id: 'calendar', label: 'Deadlines Calendar', icon: Calendar, group: 'Tasks' },
-  { id: 'notes', label: 'Notes', icon: StickyNote, group: 'Tasks' },
+  { id: 'notes', label: 'Notes & Ideas', icon: StickyNote, group: 'Tasks' },
   { id: 'pomodoro', label: 'Focus Timer', icon: Timer, group: 'Focus' },
   { id: 'analytics', label: 'Focus Analytics', icon: BarChart3, group: 'Focus' },
   { id: 'habits', label: 'Habit Tracker', icon: CalendarHeart, group: 'Personal' },
   { id: 'finance', label: 'Baon Tracker', icon: Wallet, group: 'Personal' },
-  { id: 'timetable', label: 'Class Timetable', icon: Clock, group: 'Personal' },
   { id: 'flashcards', label: 'Flashcards', icon: Layers, group: 'Personal' },
-  { id: 'scratchpad', label: 'Scratchpad', icon: StickyNote, group: 'Personal' },
   { id: 'settings', label: 'Settings', icon: SettingsIcon, group: 'System' },
 ];
 
@@ -138,6 +136,15 @@ export default function AppLayout({ page, navigate, children }: { page: PageId; 
                 <p className="text-sm font-medium text-zinc-200">Grade 10</p>
                 <p className="text-xs text-zinc-500">{SUBJECTS.length} subjects · {NUM_TERMS} terms</p>
               </div>
+              <button
+                onClick={() => navigate('settings')}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                  page === 'settings' ? 'bg-white/15 text-white' : 'text-zinc-500 hover:text-white hover:bg-white/10'
+                }`}
+                title="Settings"
+              >
+                <SettingsIcon className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>

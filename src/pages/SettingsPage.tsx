@@ -13,12 +13,12 @@ const WALLPAPERS = [
 ];
 
 const ACCENT_COLORS = [
-  { id: 'zinc', label: 'Graphite', hex: '#27272a' },
-  { id: 'blue', label: 'Ocean Blue', hex: '#3b82f6' },
-  { id: 'emerald', label: 'Emerald', hex: '#10b981' },
-  { id: 'amber', label: 'Amber', hex: '#f59e0b' },
-  { id: 'rose', label: 'Rose', hex: '#f43f5e' },
-  { id: 'violet', label: 'Violet', hex: '#8b5cf6' },
+  { id: 'zinc', label: 'Graphite', hex: '#18181b' },
+  { id: 'blue', label: 'Deep Blue', hex: '#1e3a5f' },
+  { id: 'emerald', label: 'Forest', hex: '#064e3b' },
+  { id: 'amber', label: 'Bronze', hex: '#78350f' },
+  { id: 'rose', label: 'Wine', hex: '#881337' },
+  { id: 'violet', label: 'Plum', hex: '#4c1d95' },
 ];
 
 const AI_MODELS = [

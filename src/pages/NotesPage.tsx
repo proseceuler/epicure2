@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { SUBJECTS, type Note, type SubjectKey } from '@/lib/types';
-import { Card, PageHeader, Button, Input, Select, EmptyState, Badge } from '@/components/ui';
-import { Plus, Search, Pin, PinOff, Trash2, Folder, Tag, BookOpen, X, FileText } from 'lucide-react';
+import { SUBJECTS, type Note } from '@/lib/types';
+import { Card, Button, Input, Select, EmptyState, Badge } from '@/components/ui';
+import { Plus, Search, Pin, PinOff, Trash2, Folder, Tag, BookOpen, FileText, Check, StickyNote, Pen } from 'lucide-react';
+import Whiteboard from '@/components/Whiteboard';
+
+type Tab = 'notes' | 'scratchpad' | 'whiteboard';
 
 function renderMarkdown(text: string): string {
   return text
@@ -19,6 +22,46 @@ function renderMarkdown(text: string): string {
 }
 
 export default function NotesPage() {
+  const [tab, setTab] = useState<Tab>('notes');
+
+  const tabs: { id: Tab; label: string; icon: typeof FileText }[] = [
+    { id: 'notes', label: 'Notes', icon: FileText },
+    { id: 'scratchpad', label: 'Scratchpad', icon: StickyNote },
+    { id: 'whiteboard', label: 'Whiteboard', icon: Pen },
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <div className="flex gap-1 p-1 glass rounded-xl">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  tab === t.id ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {tab === 'notes' && <NotesTab />}
+      {tab === 'scratchpad' && <ScratchpadTab />}
+      {tab === 'whiteboard' && <Whiteboard />}
+    </div>
+  );
+}
+
+// ─── Notes Tab ───
+
+function NotesTab() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -99,11 +142,10 @@ export default function NotesPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Notes"
-        subtitle="Full markdown notes with folders, tags, and subject linking"
-        action={<Button onClick={() => setShowNewNote(true)}><Plus className="w-4 h-4" /> New Note</Button>}
-      />
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-zinc-500">Full markdown notes with folders, tags, and subject linking</p>
+        <Button onClick={() => setShowNewNote(true)}><Plus className="w-4 h-4" /> New Note</Button>
+      </div>
 
       <div className="grid lg:grid-cols-4 gap-4">
         {/* Sidebar: folders + tags */}
@@ -308,6 +350,89 @@ function NoteCard({ note, onClick, onPin, isSelected }: { note: Note; onClick: (
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Scratchpad Tab ───
+
+function ScratchpadTab() {
+  const [content, setContent] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordId = useRef<string | null>(null);
+
+  const loadScratchpad = useCallback(async () => {
+    const { data } = await supabase.from('scratchpad').select('*').maybeSingle();
+    if (data) {
+      setContent(data.content);
+      recordId.current = data.id;
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadScratchpad(); }, [loadScratchpad]);
+
+  const save = useCallback(async (text: string) => {
+    setSaved(false);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      if (recordId.current) {
+        await supabase.from('scratchpad').update({ content: text, updated_at: new Date().toISOString() }).eq('id', recordId.current);
+      } else {
+        const { data } = await supabase.from('scratchpad').insert({ content: text }).select().single();
+        if (data) recordId.current = data.id;
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }, 800);
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setContent(text);
+    save(text);
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><StickyNote className="w-8 h-8 text-zinc-300 animate-pulse" /></div>;
+  }
+
+  const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = content.length;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-zinc-500">Quick capture — auto-saves as you type</p>
+        <div className="flex items-center gap-1.5 text-sm">
+          {saved ? (
+            <span className="flex items-center gap-1 text-zinc-700 font-medium">
+              <Check className="w-4 h-4" /> Saved
+            </span>
+          ) : (
+            <span className="text-zinc-400">Auto-saving...</span>
+          )}
+        </div>
+      </div>
+
+      <Card className="p-0 overflow-hidden">
+        <textarea
+          value={content}
+          onChange={handleChange}
+          autoFocus
+          placeholder="Start typing anything — ideas, reminders, formulas, quick notes..."
+          className="w-full min-h-[60vh] p-6 text-sm text-zinc-800 placeholder-zinc-400 resize-none focus:outline-none leading-relaxed bg-transparent"
+          style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+        />
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-zinc-200/40 text-xs text-zinc-400">
+          <span>{wordCount} words · {charCount} characters</span>
+          <span className="flex items-center gap-1">
+            <StickyNote className="w-3 h-3" /> Auto-saved
+          </span>
+        </div>
+      </Card>
     </div>
   );
 }

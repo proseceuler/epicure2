@@ -10,10 +10,8 @@ import CalendarPage from '@/pages/CalendarPage';
 import PomodoroPage from '@/pages/PomodoroPage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
 import HabitsPage from '@/pages/HabitsPage';
-import ScratchpadPage from '@/pages/ScratchpadPage';
 import FinancePage from '@/pages/FinancePage';
 import NotesPage from '@/pages/NotesPage';
-import TimetablePage from '@/pages/TimetablePage';
 import FlashcardsPage from '@/pages/FlashcardsPage';
 import SettingsPage from '@/pages/SettingsPage';
 
@@ -33,9 +31,7 @@ function App() {
     analytics: <AnalyticsPage />,
     habits: <HabitsPage />,
     finance: <FinancePage />,
-    timetable: <TimetablePage />,
     flashcards: <FlashcardsPage />,
-    scratchpad: <ScratchpadPage />,
     settings: <SettingsPage />,
   };
 
