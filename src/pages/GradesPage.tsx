@@ -1,21 +1,102 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { SUBJECTS, SUBJECT_MAP, EX_BREAKDOWN, NUM_TERMS, type Assessment, type SubjectKey, type ComponentType, type ExType } from '@/lib/types';
-import { computeTermGrade, computeFinalGrade, gradeDescriptor, gradeTone, componentPercentage, exComponentPercentage } from '@/lib/gradeUtils';
-import { Card, PageHeader, Button, Input, Select, Badge, EmptyState, SubjectBadge, gradeColor } from '@/components/ui';
-import { Calculator, Plus, Trash2, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
+import {
+  computeTermGrade,
+  computeFinalGrade,
+  gradeDescriptor,
+  componentPercentage,
+  neededOnRemaining,
+  termSeries,
+  PASSING,
+  DEFAULT_TARGET,
+} from '@/lib/gradeUtils';
+import { Card, PageHeader, Button, Input, Badge, gradeColor } from '@/components/ui';
+import { Calculator, Plus, Trash2, ArrowUpRight, ArrowDownRight, AlertTriangle } from 'lucide-react';
 
 const COMPONENT_LABELS: Record<ComponentType, string> = { ww: 'Written Works', pt: 'Performance Tasks', ex: 'Examinations' };
 const COMPONENT_SHORT: Record<ComponentType, string> = { ww: 'WW', pt: 'PT', ex: 'EX' };
 const EX_LABELS: Record<ExType, string> = { st1: 'Summative Test 1', st2: 'Summative Test 2', te: 'Term Examination' };
+const EX_ORDER: ExType[] = ['st1', 'st2', 'te'];
+
+const PILL = 'px-3 py-1.5 rounded-xl text-sm font-medium border transition-all';
+const PILL_ON = 'bg-zinc-900 text-white border-zinc-900';
+const PILL_OFF = 'glass text-zinc-600 border-transparent glass-hover';
+
+function TermSpark({ values }: { values: (number | null)[] }) {
+  const known = values.filter((v): v is number => v != null);
+  if (known.length === 0) {
+    return <span className="text-[11px] text-zinc-300">no terms yet</span>;
+  }
+  const min = Math.min(70, ...known);
+  const max = Math.max(100, ...known);
+  const w = 72;
+  const h = 22;
+  const pts = values.map((v, i) => {
+    const x = (i / Math.max(1, values.length - 1)) * (w - 4) + 2;
+    const y = v == null ? null : h - 3 - ((v - min) / (max - min || 1)) * (h - 6);
+    return { x, y };
+  });
+  const drawn = pts.filter((p): p is { x: number; y: number } => p.y != null);
+  const d = drawn.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="overflow-visible" width={w} height={h} aria-hidden>
+      <path d={d} fill="none" stroke="#18181b" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map((p, i) => (p.y == null ? null : <circle key={i} cx={p.x} cy={p.y} r="1.8" fill="#18181b" />))}
+    </svg>
+  );
+}
+
+function AddForm({
+  name, score, max, onName, onScore, onMax, onAdd, onCancel, namePlaceholder, extra,
+}: {
+  name: string; score: string; max: string;
+  onName: (v: string) => void; onScore: (v: string) => void; onMax: (v: string) => void;
+  onAdd: () => void; onCancel: () => void; namePlaceholder: string;
+  extra?: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden">
+      <div className="flex flex-col gap-2 pt-1.5 pb-0.5">
+        {extra}
+        <Input value={name} onChange={onName} placeholder={namePlaceholder} className="rounded-2xl" />
+        <div className="grid grid-cols-2 gap-2">
+          <Input value={score} onChange={onScore} placeholder="Score" type="number" className="rounded-2xl" />
+          <Input value={max} onChange={onMax} placeholder="Max" type="number" className="rounded-2xl" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={onAdd}>Add</Button>
+          <button type="button" onClick={onCancel} className="px-2 py-1 text-sm text-zinc-500 hover:text-zinc-800">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddTrigger({ onClick, open }: { onClick: () => void; open?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 text-xs font-medium transition-colors ${
+        open ? 'text-zinc-800' : 'text-zinc-500 hover:text-zinc-900'
+      }`}
+    >
+      <Plus className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? 'rotate-45' : ''}`} />
+      Add
+    </button>
+  );
+}
 
 export default function GradesPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState<SubjectKey>('math');
   const [selectedTerm, setSelectedTerm] = useState(1);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [adding, setAdding] = useState<{ component: ComponentType; exType?: ExType } | null>(null);
+  const [adding, setAdding] = useState<ComponentType | null>(null);
+  const [addExType, setAddExType] = useState<ExType>('te');
   const [newName, setNewName] = useState('');
   const [newScore, setNewScore] = useState('');
   const [newMax, setNewMax] = useState('');
@@ -35,6 +116,36 @@ export default function GradesPage() {
   const termGrade = computeTermGrade(selectedSubject, selectedTerm, assessments);
   const finalGrade = computeFinalGrade(selectedSubject, assessments);
   const subject = SUBJECT_MAP[selectedSubject];
+  const series = termSeries(selectedSubject, assessments);
+  const need = neededOnRemaining(selectedSubject, selectedTerm, assessments, DEFAULT_TARGET);
+
+  const termGrades = useMemo(() => {
+    return SUBJECTS.map((s) => ({
+      ...s,
+      term: computeTermGrade(s.key, selectedTerm, assessments),
+      final: computeFinalGrade(s.key, assessments),
+    }));
+  }, [assessments, selectedTerm]);
+
+  const ranked = termGrades.filter((s) => s.term != null) as Array<(typeof termGrades)[number] & { term: number }>;
+  const highest = ranked.length ? ranked.reduce((a, b) => (a.term >= b.term ? a : b)) : null;
+  const lowest = ranked.length ? ranked.reduce((a, b) => (a.term <= b.term ? a : b)) : null;
+  const atRisk = termGrades.filter((s) => s.term != null && s.term < PASSING);
+
+  const openAdd = (component: ComponentType) => {
+    if (adding === component) {
+      setAdding(null);
+      return;
+    }
+    const firstEmptyEx = EX_ORDER.find(
+      (exType) => !subjectAssessments.some((a) => a.component === 'ex' && a.ex_type === exType),
+    ) ?? 'te';
+    setAddExType(firstEmptyEx);
+    setAdding(component);
+    setNewName('');
+    setNewScore('');
+    setNewMax('');
+  };
 
   const addAssessment = async (component: ComponentType, exType?: ExType) => {
     if (!newName.trim() || !newScore || !newMax) return;
@@ -65,132 +176,28 @@ export default function GradesPage() {
     setAssessments(assessments.filter((a) => a.id !== id));
   };
 
-  const toggleExpand = (key: string) => setExpanded({ ...expanded, [key]: !expanded[key] });
-
-  const renderComponentSection = (component: ComponentType) => {
-    const items = subjectAssessments.filter((a) => a.component === component);
-    const pct = componentPercentage(subjectAssessments, component);
-    const key = component;
-    const weight = subject.weights[component];
-
-    return (
-      <Card key={key} className="overflow-hidden">
-        <button
-          onClick={() => toggleExpand(key)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/30 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            {expanded[key] ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-900 text-white">{COMPONENT_SHORT[component]}</span>
-              <span className="font-medium text-zinc-700">{COMPONENT_LABELS[component]}</span>
-              <span className="text-xs text-zinc-400">({weight}% weight)</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-500">{items.length} items</span>
-            <span className={`text-sm font-bold ${pct >= 75 ? 'text-zinc-900' : 'text-zinc-400'}`}>
-              {items.length > 0 ? `${pct.toFixed(1)}%` : '—'}
+  const renderItems = (items: Assessment[], showExType = false) =>
+    items.map((a) => (
+      <div key={a.id} className="flex items-center gap-2 py-px text-sm group">
+        <span className="flex-1 min-w-0 truncate text-zinc-600">
+          {showExType && a.ex_type && (
+            <span className="mr-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+              {a.ex_type}
             </span>
-          </div>
+          )}
+          {a.name}
+        </span>
+        <span className="text-zinc-500 tabular-nums shrink-0 text-[13px]">{a.score}/{a.max_score}</span>
+        <span className="text-zinc-400 w-9 text-right tabular-nums shrink-0 text-[12px]">{((a.score / a.max_score) * 100).toFixed(0)}%</span>
+        <button
+          type="button"
+          onClick={() => deleteAssessment(a.id)}
+          className="text-zinc-300 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
         </button>
-
-        {expanded[key] && (
-          <div className="border-t border-zinc-200/40">
-            {items.length === 0 && component !== 'ex' && (
-              <p className="px-4 py-3 text-sm text-zinc-400">No {COMPONENT_LABELS[component].toLowerCase()} added yet.</p>
-            )}
-
-            {component === 'ex' ? (
-              <div className="divide-y divide-zinc-200/30">
-                {(Object.keys(EX_LABELS) as ExType[]).map((exType) => {
-                  const exItems = items.filter((a) => a.ex_type === exType);
-                  const exPct = exComponentPercentage(subjectAssessments, exType);
-                  const exKey = `ex-${exType}`;
-                  return (
-                    <div key={exType} className="px-4">
-                      <button
-                        onClick={() => toggleExpand(exKey)}
-                        className="w-full flex items-center justify-between py-3 hover:bg-white/30 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          {expanded[exKey] ? <ChevronDown className="w-3.5 h-3.5 text-zinc-400" /> : <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />}
-                          <span className="text-sm font-medium text-zinc-600">{EX_LABELS[exType]}</span>
-                          <span className="text-xs text-zinc-400">({EX_BREAKDOWN[exType]}% of EX)</span>
-                        </div>
-                        <span className={`text-sm font-semibold ${exPct >= 75 ? 'text-zinc-900' : exItems.length > 0 ? 'text-zinc-400' : 'text-zinc-300'}`}>
-                          {exItems.length > 0 ? `${exPct.toFixed(1)}%` : '—'}
-                        </span>
-                      </button>
-                      {expanded[exKey] && (
-                        <div className="pb-3">
-                          {exItems.map((a) => (
-                            <div key={a.id} className="flex items-center gap-3 py-1.5 text-sm group">
-                              <span className="flex-1 text-zinc-600">{a.name}</span>
-                              <span className="text-zinc-500">{a.score}/{a.max_score}</span>
-                              <span className="text-zinc-400 w-12 text-right">{((a.score / a.max_score) * 100).toFixed(1)}%</span>
-                              <button onClick={() => deleteAssessment(a.id)} className="text-zinc-300 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                          {adding?.component === 'ex' && adding?.exType === exType ? (
-                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                              <Input value={newName} onChange={setNewName} placeholder="Test name" className="flex-1 min-w-[120px]" />
-                              <Input value={newScore} onChange={setNewScore} placeholder="Score" type="number" className="w-20" />
-                              <Input value={newMax} onChange={setNewMax} placeholder="Max" type="number" className="w-20" />
-                              <Button size="sm" onClick={() => addAssessment('ex', exType)}>Add</Button>
-                              <Button size="sm" variant="ghost" onClick={() => setAdding(null)}>Cancel</Button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => { setAdding({ component: 'ex', exType }); setNewName(''); setNewScore(''); setNewMax(''); }}
-                              className="flex items-center gap-1 text-xs text-zinc-700 hover:text-zinc-900 mt-2 font-medium"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Add {EX_LABELS[exType]}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="px-4 pb-3">
-                {items.map((a) => (
-                  <div key={a.id} className="flex items-center gap-3 py-1.5 text-sm group">
-                    <span className="flex-1 text-zinc-600">{a.name}</span>
-                    <span className="text-zinc-500">{a.score}/{a.max_score}</span>
-                    <span className="text-zinc-400 w-12 text-right">{((a.score / a.max_score) * 100).toFixed(1)}%</span>
-                    <button onClick={() => deleteAssessment(a.id)} className="text-zinc-300 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-                {adding?.component === component && !adding.exType ? (
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <Input value={newName} onChange={setNewName} placeholder="Assessment name" className="flex-1 min-w-[120px]" />
-                    <Input value={newScore} onChange={setNewScore} placeholder="Score" type="number" className="w-20" />
-                    <Input value={newMax} onChange={setNewMax} placeholder="Max" type="number" className="w-20" />
-                    <Button size="sm" onClick={() => addAssessment(component)}>Add</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setAdding(null)}>Cancel</Button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setAdding({ component }); setNewName(''); setNewScore(''); setNewMax(''); }}
-                    className="flex items-center gap-1 text-xs text-zinc-700 hover:text-zinc-900 mt-2 font-medium"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add {COMPONENT_LABELS[component].replace(/s$/, '')}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-    );
-  };
+      </div>
+    ));
 
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Calculator className="w-8 h-8 text-zinc-300 animate-pulse" /></div>;
@@ -202,22 +209,19 @@ export default function GradesPage() {
   return (
     <div>
       <PageHeader
-        title="Grade Calculator"
-        subtitle={`DepEd KS3 · WW ${subject.weights.ww}% · PT ${subject.weights.pt}% · EX ${subject.weights.ex}% (ST1 30% / ST2 30% / TE 40% of EX)`}
+        title="Grades"
+        subtitle={`WW ${subject.weights.ww}% · PT ${subject.weights.pt}% · EX ${subject.weights.ex}%`}
       />
 
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         {SUBJECTS.map((s) => {
           const active = selectedSubject === s.key;
           return (
             <button
               key={s.key}
+              type="button"
               onClick={() => setSelectedSubject(s.key)}
-              className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${
-                active
-                  ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
-                  : 'glass text-zinc-600 border-transparent glass-hover'
-              }`}
+              className={`${PILL} ${active ? PILL_ON : PILL_OFF}`}
             >
               {s.shortName}
             </button>
@@ -225,90 +229,181 @@ export default function GradesPage() {
         })}
       </div>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-4">
         {Array.from({ length: NUM_TERMS }, (_, i) => i + 1).map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => setSelectedTerm(t)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              selectedTerm === t
-                ? 'bg-zinc-900 text-white shadow-sm'
-                : 'glass text-zinc-600 glass-hover'
-            }`}
+            className={`${PILL} ${selectedTerm === t ? PILL_ON : PILL_OFF}`}
           >
             Term {t}
           </button>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-4">
-          <Card className="p-6 bg-zinc-900 border-zinc-800">
-            <div className="flex items-center gap-2 mb-2">
-              <BookOpen className="w-5 h-5 text-white" />
-              <span className="font-medium text-white">{subject.name}</span>
-            </div>
-            <p className="text-sm text-zinc-400 mb-4">Term {selectedTerm} Grade</p>
-            <div className="text-5xl font-bold text-white">
-              {termGrade !== null ? termGrade.toFixed(2) : '—'}
-            </div>
-            {descriptor && (
-              <div className="mt-3">
-                <span className="inline-block px-2.5 py-1 rounded-md bg-white/10 text-xs font-medium text-white">
-                  {descriptor.label}
-                </span>
+      <div className="grid lg:grid-cols-12 gap-3 items-start">
+        <div className="lg:col-span-3">
+          <Card className="px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-400">Final · {subject.shortName}</p>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className={`text-xl font-semibold tabular-nums leading-none ${gradeColor(finalGrade)}`}>
+                    {finalGrade !== null ? finalGrade.toFixed(1) : '—'}
+                  </span>
+                  {finalDescriptor && <Badge tone={finalDescriptor.tone}>{finalDescriptor.label}</Badge>}
+                </div>
               </div>
+              <TermSpark values={series} />
+            </div>
+            {descriptor && termGrade != null && (
+              <p className="text-[11px] text-zinc-400 mt-1">
+                T{selectedTerm} <span className={`font-medium ${gradeColor(termGrade)}`}>{termGrade.toFixed(1)}</span>
+                <span className="text-zinc-300"> · {descriptor.label}</span>
+              </p>
             )}
-          </Card>
-
-          <Card className="p-5">
-            <p className="text-sm text-zinc-500 mb-1">Final Grade (avg of terms)</p>
-            <div className="flex items-baseline gap-3">
-              <span className={`text-3xl font-bold ${gradeColor(finalGrade)}`}>
-                {finalGrade !== null ? finalGrade.toFixed(2) : '—'}
-              </span>
-              {finalDescriptor && <Badge tone={finalDescriptor.tone}>{finalDescriptor.label}</Badge>}
-            </div>
-            <div className="mt-4 space-y-2">
-              {Array.from({ length: NUM_TERMS }, (_, i) => i + 1).map((t) => {
-                const tg = computeTermGrade(selectedSubject, t, assessments);
-                return (
-                  <div key={t} className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500">T{t}</span>
-                    <span className={`font-semibold ${gradeColor(tg)}`}>
-                      {tg !== null ? tg.toFixed(2) : '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <p className="text-sm font-medium text-zinc-700 mb-3">All Subjects Overview</p>
-            <div className="space-y-2">
-              {SUBJECTS.map((s) => {
-                const fg = computeFinalGrade(s.key, assessments);
-                return (
-                  <div key={s.key} className="flex items-center justify-between text-sm">
-                    <button
-                      onClick={() => setSelectedSubject(s.key)}
-                      className="hover:opacity-70 transition-opacity"
-                    >
-                      <SubjectBadge shortName={s.shortName} />
-                    </button>
-                    <span className={`font-semibold ${gradeColor(fg)}`}>
-                      {fg !== null ? fg.toFixed(2) : '—'}
-                    </span>
-                  </div>
-                );
-              })}
+            <p className="text-[10px] uppercase tracking-wide text-zinc-400 mt-2 mb-0.5">All subjects</p>
+            <div className="grid grid-cols-2 gap-x-2">
+              {termGrades.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setSelectedSubject(s.key)}
+                  className={`flex items-center justify-between gap-1 text-left rounded-md px-1 leading-5 hover:bg-zinc-100/70 ${
+                    s.key === selectedSubject ? 'bg-zinc-100/80' : ''
+                  }`}
+                >
+                  <span className="text-[11px] text-zinc-600 truncate">{s.shortName}</span>
+                  <span className={`text-[11px] font-semibold tabular-nums ${gradeColor(s.term)}`}>
+                    {s.term != null ? s.term.toFixed(0) : '—'}
+                  </span>
+                </button>
+              ))}
             </div>
           </Card>
         </div>
 
-        <div className="lg:col-span-2 space-y-4">
-          {(['ww', 'pt', 'ex'] as ComponentType[]).map(renderComponentSection)}
+        <Card className="lg:col-span-4 overflow-hidden self-start">
+          {(['ww', 'pt', 'ex'] as ComponentType[]).map((component, idx) => {
+            const items = subjectAssessments.filter((a) => a.component === component);
+            const pct = componentPercentage(subjectAssessments, component);
+            const weight = subject.weights[component];
+            const isOpen = adding === component;
+            return (
+              <div key={component} className={idx > 0 ? 'border-t border-zinc-200/50' : ''}>
+                <div className="flex items-center gap-2 px-3 py-1.5">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-zinc-900 text-white">
+                    {COMPONENT_SHORT[component]}
+                  </span>
+                  <span className="text-[13px] font-medium text-zinc-700 truncate">{COMPONENT_LABELS[component]}</span>
+                  <span className="text-[11px] text-zinc-400 shrink-0">{weight}%</span>
+                  {items.length > 0 && (
+                    <span className={`ml-auto text-[12px] font-semibold tabular-nums ${pct >= 75 ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                      {pct.toFixed(0)}%
+                    </span>
+                  )}
+                  <span className={items.length > 0 ? '' : 'ml-auto'}>
+                    <AddTrigger open={isOpen} onClick={() => openAdd(component)} />
+                  </span>
+                </div>
+
+                {(items.length > 0 || isOpen) && (
+                  <div className="px-3 pb-1.5">
+                    {items.length > 0 && <div>{renderItems(items, component === 'ex')}</div>}
+                    {isOpen && (
+                      <AddForm
+                        name={newName}
+                        score={newScore}
+                        max={newMax}
+                        onName={setNewName}
+                        onScore={setNewScore}
+                        onMax={setNewMax}
+                        onAdd={() => addAssessment(component, component === 'ex' ? addExType : undefined)}
+                        onCancel={() => setAdding(null)}
+                        namePlaceholder="Name"
+                        extra={
+                          component === 'ex' ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {EX_ORDER.map((exType) => (
+                                <button
+                                  key={exType}
+                                  type="button"
+                                  onClick={() => setAddExType(exType)}
+                                  className={`${PILL} !py-1 !text-[11px] ${addExType === exType ? PILL_ON : PILL_OFF}`}
+                                >
+                                  {EX_LABELS[exType].replace('Summative Test ', 'ST').replace('Term Examination', 'TE')}
+                                  <span className="ml-1 opacity-60">{EX_BREAKDOWN[exType]}%</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null
+                        }
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </Card>
+
+        <div className="lg:col-span-5 grid gap-3">
+          <Card className="px-3.5 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-zinc-400">To hit {DEFAULT_TARGET}</p>
+            <p className="mt-1 text-sm font-medium text-zinc-800 leading-snug">{need.message}</p>
+            {need.needed != null && need.possible && !need.alreadyMet && (
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-zinc-900">
+                {need.needed}
+                <span className="ml-1.5 text-sm font-medium text-zinc-400">on {need.on}</span>
+              </p>
+            )}
+          </Card>
+
+          <Card className="px-3.5 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-zinc-400">This term</p>
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-[12px] text-zinc-500">
+                  <ArrowUpRight className="w-3.5 h-3.5" /> Highest
+                </span>
+                <span className="text-[12px] font-semibold text-zinc-800">
+                  {highest ? `${highest.shortName} · ${highest.term.toFixed(1)}` : '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-[12px] text-zinc-500">
+                  <ArrowDownRight className="w-3.5 h-3.5" /> Lowest
+                </span>
+                <span className="text-[12px] font-semibold text-zinc-800">
+                  {lowest ? `${lowest.shortName} · ${lowest.term.toFixed(1)}` : '—'}
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="px-3.5 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-zinc-400 flex items-center gap-1.5">
+              <AlertTriangle className="w-3 h-3" /> At risk
+              <span className="ml-auto font-semibold text-zinc-700">{atRisk.length}</span>
+            </p>
+            {atRisk.length === 0 ? (
+              <p className="mt-2 text-[12px] text-zinc-500">None below {PASSING} this term.</p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {atRisk.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setSelectedSubject(s.key)}
+                    className={`${PILL} ${PILL_OFF} !py-1 !text-[11px]`}
+                  >
+                    {s.shortName} {s.term?.toFixed(0)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       </div>
     </div>
