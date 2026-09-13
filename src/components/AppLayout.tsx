@@ -2,7 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { SUBJECTS, NUM_TERMS } from '@/lib/types';
 import GlobalDock from '@/components/GlobalDock';
 import {
-  LayoutDashboard, Calculator, FolderTree, CheckSquare, Calendar,
+  LayoutDashboard, FunctionSquare, FolderTree, CheckSquare, Calendar,
   Timer, BarChart3, CalendarHeart, StickyNote, Wallet,
   GraduationCap, Menu, X
 } from 'lucide-react';
@@ -22,7 +22,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
-  { id: 'grades', label: 'Grade Calculator', icon: Calculator, group: 'Academic' },
+  { id: 'grades', label: 'Grade Calculator', icon: FunctionSquare, group: 'Academic' },
   { id: 'forecast', label: 'Grade Forecaster', icon: BarChart3, group: 'Academic' },
   { id: 'classhub', label: 'Class Hub', icon: FolderTree, group: 'Academic' },
   { id: 'todos', label: 'To-Do List', icon: CheckSquare, group: 'Tasks' },
@@ -67,24 +67,20 @@ export default function AppLayout({ page, navigate, children }: { page: PageId; 
 
   return (
     <div className="min-h-screen bg-zinc-100 relative overflow-hidden">
-      {/* Ambient background blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-zinc-300/20 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-40 w-96 h-96 bg-zinc-400/15 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-zinc-200/25 rounded-full blur-3xl" />
       </div>
 
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-zinc-900/30 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Floating sidebar */}
       <aside className={`fixed top-4 left-4 bottom-4 w-60 z-40 transition-transform duration-300 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-[280px] lg:translate-x-0'
       }`}>
         <div className="glass-dark glass-shadow-lg rounded-3xl h-full flex flex-col overflow-hidden">
-          {/* Logo */}
           <div className="flex items-center gap-3 px-5 h-16 shrink-0">
             <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-white" />
@@ -92,7 +88,6 @@ export default function AppLayout({ page, navigate, children }: { page: PageId; 
             <span className="font-bold text-lg text-white">StudyHub</span>
           </div>
 
-          {/* Nav */}
           <nav className="flex-1 overflow-y-auto py-3 px-3">
             {GROUPS.map((group) => (
               <div key={group} className="mb-3">
@@ -119,11 +114,10 @@ export default function AppLayout({ page, navigate, children }: { page: PageId; 
             ))}
           </nav>
 
-          {/* Footer */}
           <div className="border-t border-white/5 p-3 shrink-0">
             <div className="flex items-center gap-2 px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold text-white">
-                G
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white">
+                <FunctionSquare className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-zinc-200">Grade 10</p>
@@ -134,9 +128,7 @@ export default function AppLayout({ page, navigate, children }: { page: PageId; 
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="lg:pl-72 flex flex-col min-h-screen relative z-10">
-        {/* Floating header */}
         <header className="sticky top-4 z-20 px-4 lg:px-6 mb-2">
           <div className="glass glass-shadow rounded-2xl h-14 flex items-center justify-between px-4">
             <div className="flex items-center gap-3">
@@ -151,13 +143,11 @@ export default function AppLayout({ page, navigate, children }: { page: PageId; 
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 px-4 lg:px-6 pb-24 pt-2">
           {children}
         </main>
       </div>
 
-      {/* Global bottom dock */}
       <GlobalDock navigate={navigate} />
     </div>
   );
